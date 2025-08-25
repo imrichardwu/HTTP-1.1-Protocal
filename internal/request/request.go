@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+
+	"http-1.1/internal/headers"
 )
 
 type RequestLine struct {
@@ -18,6 +20,7 @@ func (r *RequestLine) ValidHTTP() bool {
 
 type Request struct {
 	RequestLine RequestLine
+	headers     *headers.Headers
 	state       parserState
 }
 
@@ -29,14 +32,16 @@ var ErrorRequestInErrorState = fmt.Errorf("request in error state")
 type parserState string
 
 const (
-	StateInit  parserState = "init"
-	StateDone  parserState = "done"
-	StateError parserState = "error"
+	StateInit    parserState = "init"
+	StateHeaders parserState = "headers"
+	StateDone    parserState = "done"
+	StateError   parserState = "error"
 )
 
 func newRequest() *Request {
 	return &Request{
-		state: StateInit,
+		state:   StateInit,
+		headers: headers.NewHeaders(),
 	}
 }
 
@@ -76,10 +81,10 @@ func (r *Request) parse(data []byte) (int, error) {
 	read := 0
 outer:
 	for {
-
+		currentData := data[read:]
 		switch r.state {
 		case StateInit:
-			rl, n, err := parseRequestLine(data)
+			rl, n, err := parseRequestLine(currentData)
 			if err != nil {
 				r.state = StateError
 				return 0, ErrorRequestInErrorState
@@ -92,9 +97,28 @@ outer:
 			r.RequestLine = *rl
 			read += n
 
-			r.state = StateDone
+			r.state = StateHeaders
+
+		case StateHeaders:
+			n, done, err := r.headers.Parse(currentData)
+			if err != nil {
+				return 0, err
+			}
+
+			if n == 0 {
+				break outer
+			}
+
+			read += n
+
+			if done {
+				r.state = StateDone
+			}
+
 		case StateDone:
 			break outer
+		default:
+			panic("Somehow we have programmed poorly")
 		}
 	}
 	return read, nil
