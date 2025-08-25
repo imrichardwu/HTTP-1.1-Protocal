@@ -49,6 +49,7 @@ func (h Headers) Parse(data []byte) (int, bool, error) {
 			return 0, false, err
 		}
 
+		// Skip past the "\r\n" and continue to look for more fileline
 		read += idx + len(rn)
 
 		h[name] = value
