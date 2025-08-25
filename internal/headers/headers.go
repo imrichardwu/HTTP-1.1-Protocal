@@ -40,6 +40,7 @@ func (h Headers) Parse(data []byte) (int, bool, error) {
 		// Empty Header
 		if idx == 0 {
 			done = true
+			read += len(rn)
 			break
 		}
 
@@ -48,7 +49,7 @@ func (h Headers) Parse(data []byte) (int, bool, error) {
 			return 0, false, err
 		}
 
-		read = idx + len(rn)
+		read += idx + len(rn)
 
 		h[name] = value
 
