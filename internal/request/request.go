@@ -128,6 +128,10 @@ func (r *Request) done() bool {
 	return r.state == StateDone || r.state == StateError
 }
 
+func (r *Request) Headers() *headers.Headers {
+	return r.headers
+}
+
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	request := newRequest()
 
