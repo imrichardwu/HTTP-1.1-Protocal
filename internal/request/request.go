@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 
 	"http-1.1/internal/headers"
 )
@@ -20,8 +21,23 @@ func (r *RequestLine) ValidHTTP() bool {
 
 type Request struct {
 	RequestLine RequestLine
-	headers     *headers.Headers
+	Headers     *headers.Headers
 	state       parserState
+	Body        string
+}
+
+func getInt(headers *headers.Headers, name string, defaultvalue int) int {
+	valueStr, exists := headers.Get(name)
+	if !exists {
+		return defaultvalue
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return defaultvalue
+	}
+
+	return value
 }
 
 var SEPERATOR = []byte("\r\n")
@@ -34,6 +50,7 @@ type parserState string
 const (
 	StateInit    parserState = "init"
 	StateHeaders parserState = "headers"
+	StateBody    parserState = "body"
 	StateDone    parserState = "done"
 	StateError   parserState = "error"
 )
@@ -41,7 +58,8 @@ const (
 func newRequest() *Request {
 	return &Request{
 		state:   StateInit,
-		headers: headers.NewHeaders(),
+		Headers: headers.NewHeaders(),
+		Body:    "",
 	}
 }
 
@@ -100,8 +118,9 @@ outer:
 			r.state = StateHeaders
 
 		case StateHeaders:
-			n, done, err := r.headers.Parse(currentData)
+			n, done, err := r.Headers.Parse(currentData)
 			if err != nil {
+				r.state = StateError
 				return 0, err
 			}
 
@@ -112,6 +131,26 @@ outer:
 			read += n
 
 			if done {
+				r.state = StateBody
+			}
+
+		case StateBody:
+			length := getInt(r.Headers, "content-length", 0)
+			if length == 0 {
+				r.state = StateDone
+				break outer
+			}
+
+			remaining := min(length-len(r.Body), len(currentData))
+			if remaining == 0 {
+				// No more data to read, but we haven't reached the expected content length
+				break outer
+			}
+
+			r.Body += string(currentData[:remaining])
+			read += remaining
+
+			if len(r.Body) == length {
 				r.state = StateDone
 			}
 
@@ -128,10 +167,6 @@ func (r *Request) done() bool {
 	return r.state == StateDone || r.state == StateError
 }
 
-func (r *Request) Headers() *headers.Headers {
-	return r.headers
-}
-
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	request := newRequest()
 
@@ -140,6 +175,13 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	for !request.done() {
 		n, err := reader.Read(buf[bufLen:])
 		if err != nil {
+			// Check if we have incomplete body content
+			if err == io.EOF && request.state == StateBody {
+				expectedLength := getInt(request.Headers, "content-length", 0)
+				if len(request.Body) < expectedLength {
+					return nil, fmt.Errorf("incomplete body: expected %d bytes, got %d", expectedLength, len(request.Body))
+				}
+			}
 			return nil, err
 		}
 
