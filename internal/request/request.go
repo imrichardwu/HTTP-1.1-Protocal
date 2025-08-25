@@ -95,11 +95,19 @@ func parseRequestLine(b []byte) (*RequestLine, int, error) {
 
 }
 
+func (r *Request) hasBody() bool {
+	length := getInt(r.Headers, "content-length", 0)
+	return length > 0
+}
+
 func (r *Request) parse(data []byte) (int, error) {
 	read := 0
 outer:
 	for {
 		currentData := data[read:]
+		if len(currentData) == 0 {
+			break outer
+		}
 		switch r.state {
 		case StateInit:
 			rl, n, err := parseRequestLine(currentData)
@@ -131,7 +139,12 @@ outer:
 			read += n
 
 			if done {
-				r.state = StateBody
+				if r.hasBody() {
+					r.state = StateBody
+				} else {
+					r.state = StateDone
+				}
+
 			}
 
 		case StateBody:
@@ -142,10 +155,6 @@ outer:
 			}
 
 			remaining := min(length-len(r.Body), len(currentData))
-			if remaining == 0 {
-				// No more data to read, but we haven't reached the expected content length
-				break outer
-			}
 
 			r.Body += string(currentData[:remaining])
 			read += remaining
@@ -175,13 +184,6 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	for !request.done() {
 		n, err := reader.Read(buf[bufLen:])
 		if err != nil {
-			// Check if we have incomplete body content
-			if err == io.EOF && request.state == StateBody {
-				expectedLength := getInt(request.Headers, "content-length", 0)
-				if len(request.Body) < expectedLength {
-					return nil, fmt.Errorf("incomplete body: expected %d bytes, got %d", expectedLength, len(request.Body))
-				}
-			}
 			return nil, err
 		}
 
