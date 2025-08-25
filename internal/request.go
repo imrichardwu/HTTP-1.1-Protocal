@@ -45,6 +45,7 @@ func parseRequestLine(b []byte) (*RequestLine, int, error) {
 	if idx == -1 {
 		return nil, 0, nil
 	}
+
 	startLine := b[:idx]
 	read := idx + len(SEPERATOR)
 
@@ -115,7 +116,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		}
 
 		bufLen += n
-		readN, err := request.parse(buf[:bufLen+n])
+		readN, err := request.parse(buf[:bufLen])
 		if err != nil {
 			return nil, err
 		}
