@@ -5,7 +5,7 @@ import (
 	"log"
 	"net"
 
-	request "http-1.1/internal"
+	request "http-1.1/internal/request"
 )
 
 func main() {
