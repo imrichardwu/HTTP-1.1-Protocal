@@ -26,17 +26,15 @@ func GetDefaultHeaders(contentLen int) *headers.Headers {
 	return h
 }
 
-func WriteHeaders(w io.Writer, h *headers.Headers) error {
-	b := []byte{}
-	h.ForEach(func(n, v string) {
-		b = fmt.Appendf(b, "%s: %s\r\n", n, v)
-	})
-	b = append(b, []byte("\r\n")...)
-	_, err := w.Write(b)
-	return err
+type Writer struct {
+	writer io.Writer
 }
 
-func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
+func NewWriter(w io.Writer) *Writer {
+	return &Writer{writer: w}
+}
+
+func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	statusLine := []byte{}
 	switch statusCode {
 	case StatusOk:
@@ -46,9 +44,24 @@ func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
 	case StatusInternalServerError:
 		statusLine = []byte("HTTP/1.1 500 Internal Server Error\r\n")
 	default:
-		fmt.Errorf("Unrecoginzed error code: %d", statusCode)
+		return fmt.Errorf("Unrecoginzed error code: %d", statusCode)
 	}
 
-	_, err := w.Write(statusLine)
+	_, err := w.writer.Write(statusLine)
 	return err
+}
+func (w *Writer) WriteHeaders(h *headers.Headers) error {
+	b := []byte{}
+	h.ForEach(func(n, v string) {
+		b = fmt.Appendf(b, "%s: %s\r\n", n, v)
+	})
+	b = append(b, []byte("\r\n")...)
+	_, err := w.writer.Write(b)
+	return err
+
+}
+func (w *Writer) WriteBody(p []byte) (int, error) {
+	n, err := w.writer.Write(p)
+
+	return n, err
 }
