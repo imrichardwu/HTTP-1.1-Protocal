@@ -61,7 +61,7 @@ func main() {
 		if req.RequestLine.RequestTarget != "/yourproblem" {
 			body = respond400()
 			status = response.StatusBadRequest
-		} else if req.RequestLine.Method != "GET" {
+		} else if req.RequestLine.Method != "/myproblem" {
 			body = respond500()
 			status = response.StatusInternalServerError
 		} else {
