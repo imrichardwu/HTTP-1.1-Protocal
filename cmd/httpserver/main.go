@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 
+	"http-1.1/internal/headers"
 	"http-1.1/internal/request"
 	"http-1.1/internal/response"
 	"http-1.1/internal/server"
@@ -52,6 +54,14 @@ func respond200() []byte {
 </html>`)
 }
 
+func toStr(bytes []byte) string {
+	out := ""
+	for _, b := range bytes {
+		out += fmt.Sprintf("%02x", b)
+	}
+	return out
+}
+
 func main() {
 	s, err := server.Serve(port, func(w *response.Writer, req *request.Request) {
 		h := response.GetDefaultHeaders(0)
@@ -66,7 +76,16 @@ func main() {
 		} else if req.RequestLine.Method == "/myproblem" {
 			body = respond500()
 			status = response.StatusInternalServerError
-		} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/stream") {
+		} else if req.RequestLine.RequestTarget == "/video" {
+			f, _ := os.ReadFile("assets/vim.mp4")
+			h.Replace("Content-Type", "video/mp4")
+			h.Replace("Content-Length", fmt.Sprintf("%d", len(f)))
+
+			w.WriteStatusLine(response.StatusOk)
+			w.WriteHeaders(*h)
+			w.WriteBody(f)
+
+		} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/") {
 			target := req.RequestLine.RequestTarget
 			res, err := http.Get("https://httpbin.org/" + target[len("/httpbin/"):])
 			if err != nil {
@@ -76,18 +95,28 @@ func main() {
 				h.Delete("Content-Length")
 				h.Set("transfer-encoding", "chunked")
 				h.Replace("Content-Type", "text/plain")
+				h.Set("Trailer", "X-Content-SHA256")
+				h.Set("Trailer", "X-Content-Length")
 				w.WriteHeaders(*h)
+
+				fullbody := []byte{}
 				for {
 					data := make([]byte, 32)
 					n, err := res.Body.Read(data)
 					if err != nil {
 						break
 					}
+					fullbody = append(fullbody, data[:n]...)
 					w.WriteBody([]byte(fmt.Sprintf("%x\r\n", n)))
 					w.WriteBody(data[:n])
 					w.WriteBody([]byte("\r\n"))
 				}
-				w.WriteBody([]byte("0\r\n\r\n"))
+				w.WriteBody([]byte("0\r\n"))
+				trailer := headers.NewHeaders()
+				out := sha256.Sum256(fullbody)
+				trailer.Set("X-Content-SHA256", toStr(out[:]))
+				trailer.Set("X-Content-Length", fmt.Sprintf("%d", len(fullbody)))
+				w.WriteHeaders(*trailer)
 				return
 			}
 		}
