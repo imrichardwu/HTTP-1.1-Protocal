@@ -50,7 +50,7 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	_, err := w.writer.Write(statusLine)
 	return err
 }
-func (w *Writer) WriteHeaders(h *headers.Headers) error {
+func (w *Writer) WriteHeaders(h headers.Headers) error {
 	b := []byte{}
 	h.ForEach(func(n, v string) {
 		b = fmt.Appendf(b, "%s: %s\r\n", n, v)
