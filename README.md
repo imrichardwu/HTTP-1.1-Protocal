@@ -188,14 +188,6 @@ Each incoming connection is handled in a separate goroutine, allowing the server
 
 The server uses buffered reading to efficiently parse incoming requests while managing memory usage for large request bodies.
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
 ## License
 
 This project is for educational purposes, demonstrating HTTP/1.1 protocol implementation in Go.
